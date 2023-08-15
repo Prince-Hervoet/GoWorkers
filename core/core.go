@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	_WORKER_SIZE_FLAG  = 64
-	_WORKER_TIMEOUT    = 5000
-	_WORKER_CHECK_SIZE = 16
+	_WORKER_SIZE_FLAG  = 64   // 检查工作者的阈值数量
+	_WORKER_TIMEOUT    = 5000 // 工作者过期时间5000ms
+	_WORKER_CHECK_SIZE = 16   // 每次检查的工作者数量
 )
 
 // 工作者类
@@ -17,6 +17,8 @@ type GoWorkers struct {
 	workerCapacity int32
 	// goroutine数量
 	workerSize int32
+	// 任务缓存上限
+	taskCapacity int32
 	// 空闲链表长度
 	freeSize int32
 	// 是否停止了
@@ -28,6 +30,7 @@ type GoWorkers struct {
 	workersTail *worker
 	workersLock sync.Mutex
 	workerCond  sync.Cond
+	closeWg     sync.WaitGroup
 }
 
 func NewGoWorker(capacity, bufferCap int32) *GoWorkers {
@@ -41,28 +44,48 @@ func NewGoWorker(capacity, bufferCap int32) *GoWorkers {
 		workerCapacity: capacity,
 		workerSize:     0,
 		freeSize:       0,
+		taskCapacity:   bufferCap,
 		isStoped:       false,
 		tasksBuffer:    make(chan func(), bufferCap),
 		workersHead:    nil,
 		workersTail:    nil,
 	}
 	ans.workerCond = *sync.NewCond(&ans.workersLock)
+
+	// 开启两个协程进行后台任务
 	go ans.run()
 	go ans.checkExpire()
 	return ans
 }
 
-func (gw *GoWorkers) Stop() {
+func (gw *GoWorkers) Reboot() {
 	gw.workersLock.Lock()
 	defer gw.workersLock.Unlock()
+	if !gw.isStoped {
+		return
+	}
+	gw.isStoped = false
+	gw.tasksBuffer = make(chan func(), gw.taskCapacity)
+	go gw.run()
+	go gw.checkExpire()
+}
+
+func (gw *GoWorkers) Stop() {
+	gw.workersLock.Lock()
+	gw.closeWg.Add(2)
+
+	// 关闭扫描协程
 	gw.isStoped = true
 	gw.workerCond.Signal()
+
+	// 关闭主处理协程
 	close(gw.tasksBuffer)
 	gw.workersHead = nil
 	gw.workersTail = nil
 	gw.freeSize = 0
-	gw.workerCapacity = 0
 	gw.workerSize = 0
+	gw.workersLock.Unlock()
+	gw.closeWg.Wait()
 }
 
 func (gw *GoWorkers) WorkerCap() int32 {
@@ -114,22 +137,27 @@ func (gw *GoWorkers) run() {
 		if !ok {
 			break
 		}
+
+		// 在空闲链表中获取worker
 		w := gw.getWorker()
 		if w != nil {
 			w.pushTask(task)
 			continue
 		}
 
+		// 如果没有空闲的worker，则尝试创建
 		if gw.createWorker(task) {
 			continue
 		}
 
+		// 如果创建失败，则循环获取空闲worker直到获取到
 		w = gw.getWorker()
 		for w == nil {
 			w = gw.getWorker()
 		}
 		w.pushTask(task)
 	}
+	gw.closeWg.Done()
 }
 
 func (gw *GoWorkers) checkExpire() {
@@ -138,6 +166,8 @@ func (gw *GoWorkers) checkExpire() {
 		if gw.isStoped {
 			break
 		}
+
+		// 如果数量没有达到阈值，就wait等待唤醒
 		for gw.freeSize <= _WORKER_SIZE_FLAG {
 			gw.workerCond.Wait()
 			if gw.isStoped {
@@ -148,6 +178,8 @@ func (gw *GoWorkers) checkExpire() {
 		run := gw.workersHead
 		var prev *worker = nil
 		var temp *worker = nil
+
+		// 检查16个节点（设定这个值只是为了避免这个任务占用太长的锁）
 		for i := 0; i < _WORKER_CHECK_SIZE; i++ {
 			if now >= _WORKER_TIMEOUT+run.lastWorkAt {
 				temp = run.next
@@ -164,6 +196,7 @@ func (gw *GoWorkers) checkExpire() {
 	if gw.isStoped {
 		gw.workersLock.Unlock()
 	}
+	gw.closeWg.Done()
 }
 
 func (gw *GoWorkers) getWorker() *worker {

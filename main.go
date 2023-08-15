@@ -24,6 +24,12 @@ func main() {
 			fmt.Println(a)
 		})
 	}
+
+	time.Sleep(1 * time.Second)
+
+	gw.Stop()
+
+	fmt.Println("结束了。。。。")
 	for {
 	}
 }

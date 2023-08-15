@@ -6,11 +6,16 @@ import (
 )
 
 type worker struct {
-	owner       *GoWorkers
-	lastWorkAt  int64
+	// 所属的池
+	owner *GoWorkers
+	// 最后一次工作的时间
+	lastWorkAt int64
+	// 用于接收任务的阻塞channel
 	taskChannel chan func()
-	isRunning   bool
-	next        *worker
+	// 是否启动
+	isRunning bool
+	// 用于自耦合链表结构
+	next *worker
 }
 
 func newWorker(owner *GoWorkers) *worker {
@@ -43,6 +48,7 @@ func (w *worker) pushTask(task func()) {
 
 func (w *worker) workerRun() {
 	solve := func(task func()) {
+		// 异常处理
 		defer func() {
 			err := recover()
 			if err != nil {
