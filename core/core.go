@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -96,6 +95,19 @@ func (gw *GoWorkers) Execute(task func()) bool {
 	}
 }
 
+func (gw *GoWorkers) ExecuteWait(task func()) {
+	if gw.isStoped || task == nil {
+		return
+	}
+	gw.workersLock.Lock()
+	if gw.isStoped {
+		gw.workersLock.Unlock()
+		return
+	}
+	gw.workersLock.Unlock()
+	gw.tasksBuffer <- task
+}
+
 func (gw *GoWorkers) run() {
 	for {
 		task, ok := <-gw.tasksBuffer
@@ -137,7 +149,7 @@ func (gw *GoWorkers) checkExpire() {
 		var prev *worker = nil
 		var temp *worker = nil
 		for i := 0; i < _WORKER_CHECK_SIZE; i++ {
-			if now-run.lastWorkAt >= _WORKER_TIMEOUT {
+			if now >= _WORKER_TIMEOUT+run.lastWorkAt {
 				temp = run.next
 				gw.removeWorker(prev, run)
 				run.close()
@@ -147,7 +159,6 @@ func (gw *GoWorkers) checkExpire() {
 				run = run.next
 			}
 		}
-		fmt.Println("开始清理")
 		gw.workersLock.Unlock()
 	}
 	if gw.isStoped {

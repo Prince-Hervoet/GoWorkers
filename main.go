@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	gw := core.NewGoWorker(3, 500)
+	gw := core.NewGoWorker(100, 500)
 	for i := 0; i < 100; i++ {
 		a := i
 		gw.Execute(func() {
@@ -16,7 +16,14 @@ func main() {
 		})
 	}
 	time.Sleep(1 * time.Second)
-	fmt.Println(gw.FreeSize())
+	fmt.Println("===========================================")
+	for i := 0; i < 100; i++ {
+		a := i
+		gw.Execute(func() {
+			fmt.Print("test ...")
+			fmt.Println(a)
+		})
+	}
 	for {
 	}
 }
