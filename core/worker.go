@@ -1,6 +1,9 @@
 package core
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type worker struct {
 	owner       *GoWorkers
@@ -30,13 +33,29 @@ func (w *worker) putTask(task *workerTask) {
 }
 
 func (w *worker) workerRun() {
+	run := func(task *workerTask) {
+		defer func() {
+			err := recover()
+			if err != nil {
+				fmt.Println(err)
+			}
+		}()
+		task.task(task.args)
+	}
+	defer func() {
+		err := recover()
+		if err != nil {
+			fmt.Println(err)
+		}
+		w.owner.removeWorker(w)
+	}()
 	for {
 		task, ok := <-w.taskChannel
 		if !ok {
 			break
 		}
 		w.lastWorkAt = time.Now().UnixMilli()
-		task.task(task.args)
+		run(task)
 		w.owner.givebackWorker(w)
 	}
 }
