@@ -1,55 +1,73 @@
 package core
 
-import "fmt"
+import (
+	"errors"
+	"sync"
+)
 
 type GoWorkers struct {
 	workerCapacity int32
 	workerSize     int32
-	taskChannel    chan *workFuncTask
-}
-
-type worker struct {
-	workerId    int32
-	lastWorkAt  int64
-	resident    bool
-	taskChannel chan (*workFuncTask)
-}
-
-type workFuncTask struct {
-	task func(any)
-	args any
-}
-
-func workerFunc(worker *worker) {
-	for t := range worker.taskChannel {
-		func() {
-			defer func() {
-				err := recover()
-				if err != nil {
-					fmt.Println(err)
-				}
-			}()
-			t.task(t.args)
-		}()
-	}
+	freeWorkers    *workerStack
+	workersLock    sync.Mutex
 }
 
 func (gw *GoWorkers) NewGoWorkers(capacity int32) *GoWorkers {
-	return &GoWorkers{}
+	return &GoWorkers{
+		workerCapacity: capacity,
+		workerSize:     0,
+		freeWorkers:    newWorkerStack(),
+	}
 }
 
-func (gw *GoWorkers) CommitFunc(taskFunc func(any), args any) {
-	if taskFunc == nil {
+func (gw *GoWorkers) Execute(task func(any), args any) {
+	if task == nil {
 		return
 	}
-	task := &workFuncTask{
-		task: taskFunc,
+	wft := &workerTask{
+		task: task,
 		args: args,
 	}
-	gw.taskChannel <- task
+	gw.submit(wft)
 }
 
-func (gw *GoWorkers) createWorker() {
-	newWorker := &worker{}
-	go workerFunc(newWorker)
+func (gw *GoWorkers) submit(task *workerTask) error {
+	w := gw.getFreeWorker()
+	if w != nil {
+		w.putTask(task)
+		return nil
+	}
+
+	if gw.createWorker(task) {
+		return nil
+	}
+	return errors.New("pool is full")
+}
+
+func (gw *GoWorkers) getFreeWorker() *worker {
+	gw.workersLock.Lock()
+	defer gw.workersLock.Unlock()
+	if gw.freeWorkers.getSize() == 0 {
+		return nil
+	}
+	return gw.freeWorkers.pop()
+}
+
+func (gw *GoWorkers) createWorker(task *workerTask) bool {
+	gw.workersLock.Lock()
+	defer gw.workersLock.Unlock()
+	if gw.workerSize == gw.workerCapacity {
+		return false
+	}
+	nw := newWorker(gw)
+	nw.start()
+	nw.putTask(task)
+	gw.workerSize += 1
+	return true
+}
+
+func (gw *GoWorkers) givebackWorker(w *worker) {
+	gw.workersLock.Lock()
+	defer gw.workersLock.Unlock()
+	gw.freeWorkers.push(w)
 }
