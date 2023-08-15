@@ -7,17 +7,16 @@ import (
 )
 
 func main() {
-	gw := core.NewGoWorkers(1000, 500)
-	gw.Start()
-	for i := 0; i < 5; i++ {
-		gw.Execute(func(a any) {
-			fmt.Println("text")
-		}, nil)
-		time.Sleep(1 * time.Second)
+	gw := core.NewGoWorker(3, 500)
+	for i := 0; i < 100; i++ {
+		a := i
+		gw.Execute(func() {
+			fmt.Print("test ...")
+			fmt.Println(a)
+		})
 	}
 	time.Sleep(1 * time.Second)
-	fmt.Print("size: ")
-	fmt.Println(gw.Size())
+	fmt.Println(gw.FreeSize())
 	for {
 	}
 }
