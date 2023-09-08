@@ -114,7 +114,7 @@ func (gw *GoWorkers) lookupWorker(task func()) bool {
 		return true
 	}
 	if gw.currentSize < gw.capacity {
-		worker = newtaskWorker(gw)
+		worker = newTaskWorker(gw)
 		gw.currentSize += 1
 		worker.commitTask(task)
 		gw.mu.Unlock()

@@ -15,7 +15,7 @@ type taskWorker struct {
 	owner        *GoWorkers
 }
 
-func newtaskWorker(gw *GoWorkers) *taskWorker {
+func newTaskWorker(gw *GoWorkers) *taskWorker {
 	workerIdInc += 1
 	tw := &taskWorker{
 		workerId:     workerIdInc,

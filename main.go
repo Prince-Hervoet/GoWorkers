@@ -11,11 +11,9 @@ func main() {
 	gw.CommitTask(func() {
 		fmt.Println("12")
 	})
-	time.Sleep(1 * time.Second)
 	gw.CommitTask(func() {
 		fmt.Println("23")
 	})
-	time.Sleep(1 * time.Second)
 	gw.CommitTask(func() {
 		fmt.Println("34")
 	})
@@ -25,7 +23,6 @@ func main() {
 	})
 	for {
 		time.Sleep(2 * time.Second)
-		gw.Stop()
 		fmt.Println(gw.GetSize())
 	}
 }
