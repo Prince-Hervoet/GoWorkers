@@ -7,29 +7,25 @@ import (
 )
 
 func main() {
-	gw := core.NewGoWorker(100, 500)
-	for i := 0; i < 100; i++ {
-		a := i
-		gw.Execute(func() {
-			fmt.Print("test ...")
-			fmt.Println(a)
-		})
-	}
+	gw := core.NewGoWorker(100, 100)
+	gw.CommitTask(func() {
+		fmt.Println("12")
+	})
 	time.Sleep(1 * time.Second)
-	fmt.Println("===========================================")
-	for i := 0; i < 100; i++ {
-		a := i
-		gw.Execute(func() {
-			fmt.Print("test ...")
-			fmt.Println(a)
-		})
-	}
-
+	gw.CommitTask(func() {
+		fmt.Println("23")
+	})
 	time.Sleep(1 * time.Second)
-
-	gw.Stop()
-
-	fmt.Println("结束了。。。。")
+	gw.CommitTask(func() {
+		fmt.Println("34")
+	})
+	time.Sleep(1 * time.Second)
+	gw.CommitTask(func() {
+		fmt.Println("45")
+	})
 	for {
+		time.Sleep(2 * time.Second)
+		gw.Stop()
+		fmt.Println(gw.GetSize())
 	}
 }
