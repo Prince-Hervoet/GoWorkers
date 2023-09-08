@@ -37,6 +37,9 @@ func (tw *taskWorker) taskWorkerRun() {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
+					fmt.Print("task error - workerId-")
+					fmt.Print(tw.workerId)
+					fmt.Print(": ")
 					fmt.Println(err)
 				}
 			}()
